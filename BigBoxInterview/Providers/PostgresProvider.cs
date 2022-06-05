@@ -11,20 +11,12 @@ namespace BigBoxInterview
         private static string User = "nidesai@bigboxpostgres";
         private static string DBname = "postgres";
         private static string Password = "b1gboxvr!";
-        private static string Port = "5432";
 
         private string connString = "";
 
         public PostgresProvider()
         {
-            connString =
-                            String.Format(
-                                "Server={0};Username={1};Database={2};Port={3};Password={4};SSLMode=Disable",
-                                Host,
-                                User,
-                                DBname,
-                                Port,
-                                Password);
+            connString = $"Host={Host};Username={User};Password={Password};Database={DBname}";
         }
 
         public void CreateTable()
@@ -73,38 +65,27 @@ namespace BigBoxInterview
             }
         }
 
-        public Event GetActionNameCount(string actionName)
+        public int GetActionNameCount(string actionName)
         {
-            Event e = new Event();
+            int count = 0;
             using (var conn = new NpgsqlConnection(connString))
             {
                 Console.Out.WriteLine("Opening connection");
                 conn.Open();
-                using (var command = new NpgsqlCommand("SELECT COUNT(@actionName) FROM bbEvents", conn))
+                using (var command = new NpgsqlCommand("SELECT COUNT(*) FROM bbEvents WHERE action = @actionName", conn))
                 {
-                    command.Parameters.AddWithValue("action", actionName);
+                    command.Parameters.AddWithValue("actionName", actionName);
                                         
                     var reader = command.ExecuteReader();
                     while (reader.Read())
                     {
-                        e = new Event()
-                        {
-                            app = reader.GetString(0),
-                            user_id = reader.GetString(0),
-                            session_id = reader.GetString(0),
-                            local_time = reader.GetString(0),
-                            action = reader.GetString(0),
-                            context = reader.GetString(0),
-                            value = reader.GetString(0),
-                        };
+                        count = reader.GetInt32(0);
                     }
                     reader.Close();
                 }
             }
 
-            return e;
+            return count;
         }
-
-        //ToDo: Implement function that gets values by series of params
     }
 }

@@ -31,10 +31,7 @@ namespace BigBoxInterview.Controllers
         [Route("/events")]
         public IActionResult PostEvent(EventList events)
         {
-            var acceptHeader = this.Request.Headers["Accept"];
-
-            //ToDo: Having issues with SSL connection to Postgres Database. Need to resolve so we can store entries in DB
-            //PostgresProvider postgresProvider = new PostgresProvider();
+            PostgresProvider postgresProvider = new PostgresProvider();
 
             foreach (var e in events.user_events)
             {
@@ -44,18 +41,16 @@ namespace BigBoxInterview.Controllers
 
                 _memoryCache.Set(e.action, BitConverter.GetBytes(++result), new DistributedCacheEntryOptions());
 
-                //postgresProvider.InsertIntoTable(e);
+                postgresProvider.InsertIntoTable(e);
             }
 
-            return this.Ok(GetOutputString(new EventResponse(events.user_events.Count()), acceptHeader));
+            return this.Ok(GetOutputString(new EventResponse(events.user_events.Count())));
         }
 
         [HttpGet]
         [Route("/events")]
-        public ActionResult<string> GetActionCount([FromQuery(Name = "action")] string action)
-        {
-            var acceptHeader = this.Request.Headers["Accept"];
-
+        public ActionResult<string> GetActionCountFromCache([FromQuery(Name = "action")] string action)
+        {           
             byte[] bytes = _memoryCache.Get(action);
             int result = (bytes != null) ? BitConverter.ToInt32(bytes) : 0;
 
@@ -65,11 +60,39 @@ namespace BigBoxInterview.Controllers
                 count = result.ToString()
             };
 
-            return this.Ok(GetOutputString(response, acceptHeader));
+            return this.Ok(GetOutputString(response));
         }
 
-        private string GetOutputString<T>(T response, string acceptHeader)
+        [HttpGet]
+        [Route("/eventsFromDB")]
+        public ActionResult<string> GetActionCountFromDB([FromQuery(Name = "action")] string action)
         {
+            PostgresProvider postgresProvider = new PostgresProvider();
+
+            int result = postgresProvider.GetActionNameCount(action);
+
+            //Rough way to handle cases where cache and DB are out of sync
+            byte[] bytes = _memoryCache.Get(action);
+            int cacheResult = (bytes != null) ? BitConverter.ToInt32(bytes) : 0;
+
+            if (result != cacheResult)
+            {
+                _memoryCache.Set(action, BitConverter.GetBytes(result), new DistributedCacheEntryOptions());
+            }
+
+            ActionResponse response = new ActionResponse()
+            {
+                action = action,
+                count = result.ToString()
+            };
+
+            return this.Ok(GetOutputString(response));
+        }
+
+        private string GetOutputString<T>(T response)
+        {
+            var acceptHeader = this.Request.Headers["Accept"];
+
             if (acceptHeader.Contains("xml"))
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(T));
